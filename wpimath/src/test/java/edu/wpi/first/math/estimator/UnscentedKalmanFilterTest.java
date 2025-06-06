@@ -298,7 +298,7 @@ class UnscentedKalmanFilterTest {
     return MatBuilder.fill(
         Nat.N1(),
         Nat.N1(),
-        MathUtil.clamp(
+        Math.clamp(
             8 * Math.sin(Math.PI * Math.sqrt(2.0) * t)
                 + 6 * Math.sin(Math.PI * Math.sqrt(3.0) * t)
                 + 4 * Math.sin(Math.PI * Math.sqrt(5.0) * t),

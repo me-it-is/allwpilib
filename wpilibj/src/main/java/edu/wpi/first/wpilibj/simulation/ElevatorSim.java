@@ -135,7 +135,7 @@ public class ElevatorSim extends LinearSystemSim<N2, N1, N2> {
    * @param velocity New velocity in meters per second.
    */
   public final void setState(double position, double velocity) {
-    setState(VecBuilder.fill(MathUtil.clamp(position, m_minHeight, m_maxHeight), velocity));
+    setState(VecBuilder.fill(Math.clamp(position, m_minHeight, m_maxHeight), velocity));
   }
 
   /**
