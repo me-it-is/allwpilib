@@ -81,7 +81,7 @@ public class Servo implements Sendable, AutoCloseable {
    * @param value Position from 0.0 to 1.0.
    */
   public void set(double value) {
-    value = MathUtil.clamp(value, 0.0, 1.0);
+    value = Math.clamp(value, 0.0, 1.0);
 
     if (m_simPosition != null) {
       m_simPosition.set(value);
