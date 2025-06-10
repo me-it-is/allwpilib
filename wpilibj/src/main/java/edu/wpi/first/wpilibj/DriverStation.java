@@ -21,7 +21,11 @@ import edu.wpi.first.networktables.StringPublisher;
 import edu.wpi.first.networktables.StringTopic;
 import edu.wpi.first.util.EventVector;
 import edu.wpi.first.util.WPIUtilJNI;
+import edu.wpi.first.wpilibj.Alert.AlertType;
+
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalInt;
@@ -31,6 +35,9 @@ import java.util.concurrent.locks.ReentrantLock;
 public final class DriverStation {
   /** Number of Joystick ports. */
   public static final int kJoystickPorts = 6;
+  private static final Map<Integer, Map<Integer, Alert>> buttonUnplugedAlerts = new HashMap<Integer, Map<Integer, Alert>>();
+  private static final Map<Integer, Map<Integer, Alert>> joystickUnplugedAlerts = new HashMap<Integer, Map<Integer, Alert>>();
+  private static final Map<Integer, Map<Integer, Alert>> joystickPOVUnplugedAlerts = new HashMap<Integer, Map<Integer, Alert>>();
 
   private static final class HALJoystickButtons {
     public int m_buttons;
@@ -539,19 +546,17 @@ public final class DriverStation {
 
     m_cacheDataMutex.lock();
     try {
-      if (button <= m_joystickButtons[stick].m_count) {
+      boolean isGood = button <= m_joystickButtons[stick].m_count;
+      updateJoystickButtonUnpluggedWarning(
+            button,
+            stick,
+            isGood);
+      if (isGood) {
         return (m_joystickButtons[stick].m_buttons & 1 << (button - 1)) != 0;
       }
     } finally {
       m_cacheDataMutex.unlock();
     }
-
-    reportJoystickUnpluggedWarning(
-        "Joystick Button "
-            + button
-            + " on port "
-            + stick
-            + " not available, check if controller is plugged in");
     return false;
   }
 
@@ -573,7 +578,12 @@ public final class DriverStation {
 
     m_cacheDataMutex.lock();
     try {
-      if (button <= m_joystickButtons[stick].m_count) {
+      boolean isGood = button <= m_joystickButtons[stick].m_count;
+      updateJoystickButtonUnpluggedWarning(
+            button,
+            stick,
+            isGood);
+      if (isGood) {
         // If button was pressed, clear flag and return true
         if ((m_joystickButtonsPressed[stick] & 1 << (button - 1)) != 0) {
           m_joystickButtonsPressed[stick] &= ~(1 << (button - 1));
@@ -585,13 +595,6 @@ public final class DriverStation {
     } finally {
       m_cacheDataMutex.unlock();
     }
-
-    reportJoystickUnpluggedWarning(
-        "Joystick Button "
-            + button
-            + " on port "
-            + stick
-            + " not available, check if controller is plugged in");
     return false;
   }
 
@@ -613,7 +616,12 @@ public final class DriverStation {
 
     m_cacheDataMutex.lock();
     try {
-      if (button <= m_joystickButtons[stick].m_count) {
+      boolean isGood = button <= m_joystickButtons[stick].m_count;
+      updateJoystickButtonUnpluggedWarning(
+            button,
+            stick,
+            isGood);
+      if (isGood) {
         // If button was released, clear flag and return true
         if ((m_joystickButtonsReleased[stick] & 1 << (button - 1)) != 0) {
           m_joystickButtonsReleased[stick] &= ~(1 << (button - 1));
@@ -625,13 +633,6 @@ public final class DriverStation {
     } finally {
       m_cacheDataMutex.unlock();
     }
-
-    reportJoystickUnpluggedWarning(
-        "Joystick Button "
-            + button
-            + " on port "
-            + stick
-            + " not available, check if controller is plugged in");
     return false;
   }
 
@@ -653,19 +654,14 @@ public final class DriverStation {
 
     m_cacheDataMutex.lock();
     try {
-      if (axis < m_joystickAxes[stick].m_count) {
+      boolean isGood = axis < m_joystickAxes[stick].m_count;
+      updateJoystickUnpluggedWarning(stick, axis, isGood);
+      if (isGood) {
         return m_joystickAxes[stick].m_axes[axis];
       }
     } finally {
       m_cacheDataMutex.unlock();
     }
-
-    reportJoystickUnpluggedWarning(
-        "Joystick axis "
-            + axis
-            + " on port "
-            + stick
-            + " not available, check if controller is plugged in");
     return 0.0;
   }
 
@@ -686,19 +682,14 @@ public final class DriverStation {
 
     m_cacheDataMutex.lock();
     try {
-      if (pov < m_joystickPOVs[stick].m_count) {
+      boolean isGood = pov < m_joystickPOVs[stick].m_count;
+      updateJoystickPOVUnpluggedWarning(stick, pov, isGood);
+      if (isGood) {
         return m_joystickPOVs[stick].m_povs[pov];
       }
     } finally {
       m_cacheDataMutex.unlock();
     }
-
-    reportJoystickUnpluggedWarning(
-        "Joystick POV "
-            + pov
-            + " on port "
-            + stick
-            + " not available, check if controller is plugged in");
     return -1;
   }
 
@@ -1334,20 +1325,62 @@ public final class DriverStation {
       m_nextMessageTime = currentTime + JOYSTICK_UNPLUGGED_MESSAGE_INTERVAL;
     }
   }
-
   /**
-   * Reports errors related to unplugged joysticks Throttles the errors so that they don't overwhelm
-   * the DS.
+   * @param alertMap Map of all of the alerts for different joysticks
+   * @param measage measage for the alert
+   * @param port the port of the joystick
+   * @param button the index of the button, axis, ...
+   * @param isGood if the connection is good
    */
-  private static void reportJoystickUnpluggedWarning(String message) {
-    if (isFMSAttached() || !m_silenceJoystickWarning) {
-      double currentTime = Timer.getTimestamp();
-      if (currentTime > m_nextMessageTime) {
-        reportWarning(message, false);
-        m_nextMessageTime = currentTime + JOYSTICK_UNPLUGGED_MESSAGE_INTERVAL;
+  private static void updateUnpluggedWarning(Map<Integer, Map<Integer, Alert>> alertMap, String measage, Integer port, Integer button, boolean isGood) {
+    if (!isJoystickConnectionWarningSilenced()) {
+      Alert alert = buttonUnplugedAlerts.get(port).get(button);
+      if (alert == null) {
+        buttonUnplugedAlerts.get(port).put(button, new Alert(measage, AlertType.kWarning));
       }
+      alert.set(!isGood);
     }
   }
+  /**
+   * sends an alert over networktables if a joystick button is disconnected
+   * @param port port of a joystick
+   * @param button the button index on the joystick
+   * @param isGood if the connection is good
+   */
+  private static void updateJoystickButtonUnpluggedWarning(Integer port, Integer button, boolean isGood) {
+    updateUnpluggedWarning(buttonUnplugedAlerts, "Joystick Button "
+            + button
+            + " on port "
+            + port
+            + " not available, check if controller is plugged in", port, button, isGood);
+  }
+  /**
+   * sends an alert over networktables if a joystick axis is disconnected
+   * @param port port of a joystick
+   * @param axis the axis index on the joystick
+   * @param isGood if the connection is good
+   */
+  private static void updateJoystickUnpluggedWarning(Integer port, Integer axis, boolean isGood) {
+    updateUnpluggedWarning(joystickUnplugedAlerts, "Joystick axis "
+            + axis
+            + " on port "
+            + port
+            + " not available, check if controller is plugged in", port, axis, isGood);
+  }
+  /**
+   * sends an alert over networktables if a joystick POV is disconnected
+   * @param port port of a joystick
+   * @param pov the POV index on the joystick
+   * @param isGood if the connection is good
+   */
+  private static void updateJoystickPOVUnpluggedWarning(Integer port, Integer pov, boolean isGood) {
+    updateUnpluggedWarning(joystickPOVUnplugedAlerts, "Joystick POV "
+            + pov
+            + " on port "
+            + port
+            + " not available, check if controller is plugged in", port, pov, isGood);
+  }
+
 
   /**
    * Starts logging DriverStation data to data log. Repeated calls are ignored.
