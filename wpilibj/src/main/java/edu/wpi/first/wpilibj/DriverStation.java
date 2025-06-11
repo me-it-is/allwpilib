@@ -1320,6 +1320,8 @@ public final class DriverStation {
   }
 
   /**
+   * Update the status of the alerts for a button, axis,... on a joystick.
+   *
    * @param alertMap Map of all of the alerts for different joysticks
    * @param measage measage for the alert
    * @param port the port of the joystick
@@ -1338,14 +1340,15 @@ public final class DriverStation {
       }
       Alert alert = alertMap.get(port).get(button);
       if (alert == null) {
-        alert = alertMap.get(port).put(button, new Alert(measage, AlertType.kWarning));
+        alert = new Alert(measage, AlertType.kWarning);
+        alertMap.get(port).put(button, alert);
       }
       alert.set(!isGood);
     }
   }
 
   /**
-   * sends an alert over networktables if a joystick button is disconnected
+   * sends an alert over networktables if a joystick button is disconnected.
    *
    * @param port port of a joystick
    * @param button the button index on the joystick
@@ -1366,7 +1369,7 @@ public final class DriverStation {
   }
 
   /**
-   * sends an alert over networktables if a joystick axis is disconnected
+   * sends an alert over networktables if a joystick axis is disconnected.
    *
    * @param port port of a joystick
    * @param axis the axis index on the joystick
@@ -1386,7 +1389,7 @@ public final class DriverStation {
   }
 
   /**
-   * sends an alert over networktables if a joystick POV is disconnected
+   * sends an alert over networktables if a joystick POV is disconnected.
    *
    * @param port port of a joystick
    * @param pov the POV index on the joystick
