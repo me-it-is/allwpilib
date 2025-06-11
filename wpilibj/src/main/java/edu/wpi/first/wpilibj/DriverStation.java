@@ -1334,9 +1334,12 @@ public final class DriverStation {
    */
   private static void updateUnpluggedWarning(Map<Integer, Map<Integer, Alert>> alertMap, String measage, Integer port, Integer button, boolean isGood) {
     if (!isJoystickConnectionWarningSilenced()) {
-      Alert alert = buttonUnplugedAlerts.get(port).get(button);
+      if (alertMap.get(port) == null) {
+        alertMap.put(port, new HashMap<Integer, Alert>());
+      }
+      Alert alert = alertMap.get(port).get(button);
       if (alert == null) {
-        buttonUnplugedAlerts.get(port).put(button, new Alert(measage, AlertType.kWarning));
+        alertMap.get(port).put(button, new Alert(measage, AlertType.kWarning));
       }
       alert.set(!isGood);
     }
